@@ -1,0 +1,47 @@
+"use client";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowRight, Bot, Check, CircleCheck, Clock3, MapPin, Plane, Search, ShieldCheck, Sparkles, Star, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+type Package = { id:string; agency:string; title:string; route:string; dates:string; days:number; price:number; rating:number; reviews:number; verified:boolean; featured?:boolean; includes:string[]; accent:string };
+const PACKAGES:Package[]=[
+ {id:"WY-104",agency:"Safar Trails",title:"Umrah Comfort",route:"Abuja → Jeddah",dates:"12–23 Oct 2026",days:12,price:2450000,rating:4.9,reviews:184,verified:true,featured:true,includes:["Direct flight","4★ hotels","Visa","Ziyarat"],accent:"blue"},
+ {id:"WY-218",agency:"Al-Huda Travels",title:"Umrah Essential",route:"Abuja → Jeddah",dates:"15–25 Oct 2026",days:11,price:2180000,rating:4.7,reviews:129,verified:true,includes:["1-stop flight","4★ hotels","Visa","Breakfast"],accent:"orange"},
+ {id:"WY-307",agency:"Nile Gate Tours",title:"Umrah Premium",route:"Abuja → Madinah",dates:"10–22 Oct 2026",days:13,price:2780000,rating:4.8,reviews:96,verified:true,includes:["Direct flight","5★ Makkah","Visa","Full board"],accent:"navy"},
+ {id:"WY-412",agency:"Arewa Voyages",title:"Umrah Smart Saver",route:"Kano → Jeddah",dates:"18–28 Oct 2026",days:11,price:1990000,rating:4.5,reviews:77,verified:true,includes:["1-stop flight","3★ hotels","Visa","Transfers"],accent:"green"}
+];
+declare global{interface Document{modelContext?:{registerTool:(tool:Record<string,unknown>)=>void}}}
+const money=(n:number)=>`₦${(n/1000000).toFixed(2)}m`;
+
+export default function Home(){
+ const [origin,setOrigin]=useState("Abuja"),[trip,setTrip]=useState("Umrah"),[budget,setBudget]=useState("3000000");
+ const [shortlist,setShortlist]=useState<string[]>(["WY-104"]),[compare,setCompare]=useState<string[]>([]),[contact,setContact]=useState<Package|null>(null),[agentAction,setAgentAction]=useState("Ready for you or your agent");
+ const results=useMemo(()=>PACKAGES.filter(p=>p.price<=Number(budget)&&(origin==="Any"||p.route.startsWith(origin))),[budget,origin]);
+ const toggle=(id:string,setter:React.Dispatch<React.SetStateAction<string[]>>,max=99)=>setter(xs=>xs.includes(id)?xs.filter(x=>x!==id):xs.length<max?[...xs,id]:xs);
+ useEffect(()=>{if(!document.modelContext?.registerTool)return;const reg=(name:string,description:string,inputSchema:object,execute:(input:any)=>unknown)=>document.modelContext!.registerTool({name,description,inputSchema,execute});
+  reg("search_travel_packages","Search WAYGO packages and update the visible results.",{type:"object",properties:{origin:{type:"string"},budget:{type:"number"},trip_type:{type:"string"}}},(i)=>{if(i.origin)setOrigin(i.origin);if(i.budget)setBudget(String(i.budget));if(i.trip_type)setTrip(i.trip_type);setAgentAction("Agent searched travel packages");return{packages:PACKAGES.filter(p=>!i.budget||p.price<=i.budget).map(({id,title,agency,price,rating})=>({id,title,agency,price,rating}))}});
+  reg("verify_agency","Check agency verification evidence.",{type:"object",required:["package_id"],properties:{package_id:{type:"string"}}},(i)=>{const p=PACKAGES.find(x=>x.id===i.package_id);setAgentAction(`Agent verified ${p?.agency??i.package_id}`);return p?{agency:p.agency,verified:p.verified,evidence:["CAC registration checked","Tour operator licence checked","Customer record reviewed"]}:{error:"Package not found"}});
+  reg("compare_packages","Compare up to three packages and select them visibly.",{type:"object",required:["package_ids"],properties:{package_ids:{type:"array",items:{type:"string"},maxItems:3}}},(i)=>{setCompare(i.package_ids||[]);setAgentAction("Agent prepared a comparison");return PACKAGES.filter(p=>i.package_ids?.includes(p.id))});
+  reg("create_shortlist","Update the visible shortlist without booking.",{type:"object",required:["package_ids"],properties:{package_ids:{type:"array",items:{type:"string"}}}},(i)=>{setShortlist(i.package_ids||[]);setAgentAction("Agent updated your shortlist");return{shortlisted:i.package_ids,booking_created:false}});
+  reg("request_agency_contact","Prepare agency contact for human approval. Never books or pays.",{type:"object",required:["package_id"],properties:{package_id:{type:"string"},message:{type:"string"}}},(i)=>{setContact(PACKAGES.find(x=>x.id===i.package_id)||null);setAgentAction("Contact request awaiting approval");return{status:"human_approval_required",package_id:i.package_id}})
+ },[]);
+ return <main>
+  <header className="topbar"><a className="brand" href="#"><span className="brandmark"><Plane size={18}/></span>WAYGO</a><div className="agent-status"><span className="pulse"/><Bot size={16}/>{agentAction}</div><button className="shortlist-pill"><Star size={16}/> Shortlist <b>{shortlist.length}</b></button></header>
+  <section className="intro"><div><p className="eyebrow"><Sparkles size={14}/> Agent-native travel marketplace</p><h1>Find trusted travel.<br/><em>Stay in control.</em></h1><p>Compare verified African travel packages yourself—or let your agent do the legwork while you approve every important step.</p></div><div className="trust-note"><ShieldCheck/><div><b>Human approval, always</b><span>Agents can search and shortlist. Only you can contact or book.</span></div></div></section>
+  <section className="search-panel" aria-label="Travel package search">
+   <div className="field"><label>Flying from</label><Select value={origin} onValueChange={setOrigin}><SelectTrigger><MapPin size={16}/><SelectValue/></SelectTrigger><SelectContent><SelectItem value="Abuja">Abuja</SelectItem><SelectItem value="Kano">Kano</SelectItem><SelectItem value="Any">Any city</SelectItem></SelectContent></Select></div>
+   <div className="field"><label>Trip</label><Select value={trip} onValueChange={setTrip}><SelectTrigger><Plane size={16}/><SelectValue/></SelectTrigger><SelectContent><SelectItem value="Umrah">Umrah</SelectItem><SelectItem value="Hajj">Hajj</SelectItem><SelectItem value="Leisure">Leisure</SelectItem></SelectContent></Select></div>
+   <div className="field"><label>Maximum budget</label><Select value={budget} onValueChange={setBudget}><SelectTrigger><span>₦</span><SelectValue/></SelectTrigger><SelectContent><SelectItem value="2200000">₦2.2 million</SelectItem><SelectItem value="2500000">₦2.5 million</SelectItem><SelectItem value="3000000">₦3 million</SelectItem></SelectContent></Select></div>
+   <Button className="search-button" onClick={()=>setAgentAction("You searched travel packages")}><Search/> Find packages</Button>
+  </section>
+  <section className="workspace"><div className="results-head"><div><span>{results.length} VERIFIED OPTIONS</span><h2>Umrah packages from {origin}</h2></div><div className="compare-note">Select up to 3 to compare <b>{compare.length}/3</b></div></div><div className="cards">
+   {results.map(p=><article className={`package-card ${p.featured?"featured":""}`} key={p.id}>{p.featured&&<div className="best">BEST MATCH</div>}<div className={`visual ${p.accent}`}><div className="route-art"><span>ABV</span><Plane/><span>JED</span></div><div className="days"><Clock3/> {p.days} days</div></div><div className="card-body">
+    <div className="agency"><span>{p.agency}</span><span className="verified"><CircleCheck/> Verified</span></div><h3>{p.title}</h3><p className="route">{p.route} · {p.dates}</p><div className="includes">{p.includes.map(x=><span key={x}><Check/>{x}</span>)}</div><div className="rating"><Star fill="currentColor"/> <b>{p.rating}</b> <span>({p.reviews} reviews)</span></div><div className="price-row"><div><small>per person</small><strong>{money(p.price)}</strong></div><Button variant="outline" onClick={()=>toggle(p.id,setShortlist)}>{shortlist.includes(p.id)?<><Check/> Saved</>:"Shortlist"}</Button></div><label className="compare"><Checkbox checked={compare.includes(p.id)} onCheckedChange={()=>toggle(p.id,setCompare,3)}/> Compare this package</label><Button className="contact" onClick={()=>setContact(p)}>View & contact <ArrowRight/></Button>
+   </div></article>)}</div></section>
+  <aside className="agent-banner"><div className="bot-icon"><Bot/></div><div><b>Your agent can use WAYGO directly</b><span>Search, verify, compare and shortlist through structured WebMCP tools.</span></div><div className="tool-chips"><span>search_packages</span><span>verify_agency</span><span>compare_packages</span></div></aside>
+  <Dialog open={!!contact} onOpenChange={o=>!o&&setContact(null)}><DialogContent className="approval"><DialogHeader><div className="approval-icon"><Users/></div><DialogTitle>Approve agency contact</DialogTitle><DialogDescription>WAYGO will share your name and trip interest with <b>{contact?.agency}</b>. No booking or payment will be made.</DialogDescription></DialogHeader><div className="approval-package"><span>{contact?.title}</span><b>{contact&&money(contact.price)}</b></div><DialogFooter><Button variant="outline" onClick={()=>setContact(null)}>Not now</Button><Button onClick={()=>{setContact(null);setAgentAction("Contact request approved")}}>Approve contact request</Button></DialogFooter></DialogContent></Dialog>
+ </main>
+}
